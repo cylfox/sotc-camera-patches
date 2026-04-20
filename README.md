@@ -12,6 +12,8 @@ It does this with a small MIPS trampoline injected into inter-function alignment
 
 ## Install
 
+### PCSX2 (desktop, v1.7+)
+
 1. Copy `patch/0F0C4A9C_disable_freeroam_autofocus.pnach` into PCSX2's cheats folder.
    (In PCSX2: `Settings` → `Game List` → right-click your SotC PAL entry → `Open Cheats Directory` — or find it via `Documents/PCSX2/cheats/` on Windows.)
 
@@ -20,6 +22,17 @@ It does this with a small MIPS trampoline injected into inter-function alignment
 3. Start the game. The patch applies automatically per-frame via `patch=1` directives, so it's resilient to any game-side memory reinitialization.
 
 Disabling is the reverse: remove or rename the pnach file, or uncheck the "Enable Cheats" toggle.
+
+Modern PCSX2 scans the cheats folder for `<CRC>*.pnach` (glob pattern — see [`pcsx2/Patch.cpp`](https://github.com/PCSX2/pcsx2/blob/master/pcsx2/Patch.cpp)), so the descriptive filename loads automatically.
+
+### NetherSX2 / AetherSX2 (Android)
+
+NetherSX2 is based on a pre-2023 PCSX2 fork, which may require the classic exact-match filename convention. If cheats don't apply:
+
+1. Rename the file to **`0F0C4A9C.pnach`** (drop the descriptive suffix) when copying it to the cheats folder.
+2. Path on Android is typically `Android/data/com.github.stenzek.netherSX2/files/cheats/` (or `.../files/cheats_ws/` depending on NetherSX2 build).
+
+The file contents are identical; only the filename matters for the emulator's auto-discovery.
 
 ---
 
