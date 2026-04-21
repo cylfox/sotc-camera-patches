@@ -12,6 +12,8 @@ A PCSX2 pnach patch for **Shadow of the Colossus (PAL, SCES-53326, CRC `0F0C4A9C
 
 Implemented as two MIPS trampolines injected into inter-function alignment padding. No large-scale code rewrites, no runtime scripts, no emulator modifications.
 
+> **Tested configuration:** PAL SCES-53326 using **NTSC mode (60 Hz)** selected from the game's selector and **Spanish** as the in-game language. CRC `0F0C4A9C` is the same disc regardless of boot options, so the byte-level patches should apply to any PAL copy — but if you run into anything that behaves differently, this is the bench the patch was verified on.
+
 ---
 
 ## Install
