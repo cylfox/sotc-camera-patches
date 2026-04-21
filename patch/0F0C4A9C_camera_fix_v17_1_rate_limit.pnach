@@ -1,0 +1,198 @@
+gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
+comment=Camera fixes: free-roam autofocus + FPS-style aim + left-stick byte-rate limiter
+//
+// v17.1 — per-frame byte-delta rate limiter on the aim-path left-stick remap
+// =========================================================================
+// Same two-hook structure as v17. Only Trampoline A changes.
+// Trampoline B at 0x001A5248 is byte-identical to v17 (still reads
+// 0x0106DF00 / 0x0106DF0C into $f12 / $f13 outside free-roam/cinematic).
+//
+// Motivation (see docs/AIM_PRESERVE_INVESTIGATION.md):
+//   The stop-to-move / direction-reversal flicker in aim has been traced
+//   to a spike at 0x0106C230 (dir buffer) propagating through the VU0
+//   transform at 0x0125A5C8 to the rendered forward at 0x0106E7C0. The
+//   camera yaw/pitch registers 0x0106DF00 / 0x0106DF0C are themselves
+//   smooth on reversal (no outliers), so smoothing $f12 / $f13 or writing
+//   smoothed values back into the registers (v18 / v19) had no effect.
+//
+//   But: "smooth value" != "smooth derivative". On a fast reversal the
+//   raw left-stick byte can swing from e.g. 0x20 (hard left) to 0xE0
+//   (hard right) in a single frame — Δbyte = 0xC0. The pad-decode
+//   integrator produces a smooth yaw value because it just accumulates,
+//   but the yaw rate flips sign by >> 2× previous magnitude in one frame,
+//   and something inside the matrix-builder pipeline appears to
+//   proportionally kick 0x0106C230 off that rate-change. v18–v22 all
+//   tried to smooth DOWNSTREAM of the camera yaw/pitch integration;
+//   this variant smooths UPSTREAM, at the single point where our remap
+//   feeds the game's pad pipeline.
+//
+//   Concretely: in the aim path, before writing the left-X / left-Y
+//   bytes to the right-stick scratch slots s0+0x56 / s0+0x57, clamp
+//   |byte - prev_byte| to CLAMP_MAX (default 0x20 ≈ 12.5% per frame,
+//   so full-deflection transitions take ~4 frames). prev_byte is kept
+//   in free EE memory at 0x001A4A48 / 0x001A4A4C and seeded to 0x80
+//   (stick-center) at load. The non-aim / deadzone paths are unchanged.
+//
+//   If this reduces the flicker, the rate-change hypothesis is right and
+//   CLAMP_MAX can be tuned (lower = smoother but more input lag, higher
+//   = snappier but more flicker). If not, the problem is further
+//   downstream and the doc's write-BP diagnostic plan for 0x0106C230
+//   (the four known writers 0x0142358C / 0x01176CA4 / 0x01176CE8 /
+//   0x01423430) is the next step.
+//
+// Trampoline A v17.1 layout (48 instructions + 2 scratch words)
+// ------------------------------------------------------------
+//   +0x00 lui   at, 0x0107
+//   +0x04 lw    at, -0x3604(at)         ; mode flag 0x0106C9FC
+//   +0x08 bne   at, zero, DEADZONE      ; free-roam -> deadzone check
+//   +0x0C nop
+//   +0x10 lui   at, 0x0107
+//   +0x14 lw    at, -0x4B7C(at)         ; AIM flag 0x0106B484
+//   +0x18 addiu at, at, -1              ; at = aim - 1
+//   +0x1C bne   at, zero, DEADZONE      ; aim != 1 -> deadzone
+//   +0x20 nop
+// // --- aim path: left-X with delta clamp ---
+//   +0x24 lbu   t0, 0x108(s2)           ; t0 = new left-X byte
+//   +0x28 lui   t9, 0x001A              ; t9 = 0x001A0000 (scratch base)
+//   +0x2C lbu   t1, 0x4A48(t9)          ; t1 = prev left-X
+//   +0x30 subu  t2, t0, t1              ; t2 = delta (signed 32b)
+//   +0x34 slti  t3, t2, 0x21            ; t3 = (delta < 33)
+//   +0x38 bnez  t3, +4 (chk_neg_X)      ; delta < 33 -> check negative
+//   +0x3C nop
+//   +0x40 addiu t0, t1, 0x20            ; clamp high: out = prev + 32
+//   +0x44 b     +5 (store_X)
+//   +0x48 nop
+//   +0x4C addiu t3, t2, 0x20            ; chk_neg_X: t3 = delta + 32
+//   +0x50 bgez  t3, +2 (store_X)        ; delta >= -32 -> no clamp
+//   +0x54 nop
+//   +0x58 addiu t0, t1, -0x20           ; clamp low: out = prev - 32
+//   +0x5C sb    t0, 0x56(s0)            ; store_X: write right-X scratch
+//   +0x60 sb    t0, 0x4A48(t9)          ; persist prev_X
+// // --- aim path: left-Y with delta clamp ---
+//   +0x64 lbu   v0, 0x109(s2)           ; v0 = new left-Y byte
+//   +0x68 lbu   t1, 0x4A4C(t9)          ; t1 = prev left-Y
+//   +0x6C subu  t2, v0, t1              ; delta
+//   +0x70 slti  t3, t2, 0x21
+//   +0x74 bnez  t3, +4 (chk_neg_Y)
+//   +0x78 nop
+//   +0x7C addiu v0, t1, 0x20            ; clamp high
+//   +0x80 b     +5 (store_Y)
+//   +0x84 nop
+//   +0x88 addiu t3, t2, 0x20            ; chk_neg_Y
+//   +0x8C bgez  t3, +2 (store_Y)
+//   +0x90 nop
+//   +0x94 addiu v0, t1, -0x20           ; clamp low
+//   +0x98 sb    v0, 0x4A4C(t9)          ; store_Y: persist prev_Y
+//                                       ; (s0+0x57 written below at RET
+//                                       ;  delay slot with v0 = clamped)
+//   +0x9C j     RET (0x001A4A3C)
+//   +0xA0 nop
+// DEADZONE (unchanged from v17):
+//   +0xA4 addiu at, v0, -0x41
+//   +0xA8 sltiu at, at, 0x7F            ; byte in [0x41, 0xBF]?
+//   +0xAC beq   at, zero, RET (+2)
+//   +0xB0 nop
+//   +0xB4 addiu v0, zero, 0xC0          ; deadzone substitute
+// RET:
+//   +0xB8 j     0x001ACD4C
+//   +0xBC sb    v0, 0x57(s0)            ; delay slot
+// Scratch (4 bytes each, only low byte used by lbu/sb):
+//   0x001A4A48: prev_X (seeded to 0x80 center)
+//   0x001A4A4C: prev_Y (seeded to 0x80 center)
+//
+// NOTE on register usage: the aim path clobbers t0, t1, t2, t3, t9.
+// v16/v17 already clobber t0 safely across the hook, so these caller-
+// saved registers are assumed dead in the surrounding pad-decode
+// function. If a crash appears on load or on first aim, the assumption
+// is wrong — fall back to v17 and either (a) save t1/t2/t3/t9 to free
+// EE memory slots at trampoline entry or (b) rewrite the clamp using
+// only at + t0 + v0 (possible but fiddlier, no free temporaries for
+// the two-sided compare).
+//
+// NOTE on first-frame transient: prev_X / prev_Y are seeded to 0x80
+// (center) at apply time, and are only updated on aim-path frames.
+// When aim re-engages with the stick held off-center, the first 1-4
+// frames ramp in to the held byte at <= CLAMP_MAX/frame. Imperceptible
+// in practice; if you want to eliminate it, add 4 instructions at the
+// top of DEADZONE to refresh prev_X / prev_Y from the raw left-X / Y
+// bytes every non-aim frame.
+
+// ==== Hook A: pad-read (unchanged from v17) =============================
+patch=1,EE,0001ACD44,word,08069261
+patch=1,EE,0001ACD48,word,92420107
+
+// ==== Trampoline A body at 0x001A4984 (v17.1) ===========================
+// gating
+patch=1,EE,001A4984,word,3C010107
+patch=1,EE,001A4988,word,8C21C9FC
+patch=1,EE,001A498C,word,14200026
+patch=1,EE,001A4990,word,00000000
+patch=1,EE,001A4994,word,3C010107
+patch=1,EE,001A4998,word,8C21B484
+patch=1,EE,001A499C,word,2421FFFF
+patch=1,EE,001A49A0,word,14200021
+patch=1,EE,001A49A4,word,00000000
+// aim-path left-X
+patch=1,EE,001A49A8,word,92480108
+patch=1,EE,001A49AC,word,3C19001A
+patch=1,EE,001A49B0,word,93294A48
+patch=1,EE,001A49B4,word,01095023
+patch=1,EE,001A49B8,word,294B0021
+patch=1,EE,001A49BC,word,15600004
+patch=1,EE,001A49C0,word,00000000
+patch=1,EE,001A49C4,word,25280020
+patch=1,EE,001A49C8,word,10000005
+patch=1,EE,001A49CC,word,00000000
+patch=1,EE,001A49D0,word,254B0020
+patch=1,EE,001A49D4,word,05610002
+patch=1,EE,001A49D8,word,00000000
+patch=1,EE,001A49DC,word,2528FFE0
+patch=1,EE,001A49E0,word,A2080056
+patch=1,EE,001A49E4,word,A3284A48
+// aim-path left-Y
+patch=1,EE,001A49E8,word,92420109
+patch=1,EE,001A49EC,word,93294A4C
+patch=1,EE,001A49F0,word,004A5023
+patch=1,EE,001A49F4,word,294B0021
+patch=1,EE,001A49F8,word,15600004
+patch=1,EE,001A49FC,word,00000000
+patch=1,EE,001A4A00,word,25220020
+patch=1,EE,001A4A04,word,10000005
+patch=1,EE,001A4A08,word,00000000
+patch=1,EE,001A4A0C,word,254B0020
+patch=1,EE,001A4A10,word,05610002
+patch=1,EE,001A4A14,word,00000000
+patch=1,EE,001A4A18,word,2522FFE0
+patch=1,EE,001A4A1C,word,A3224A4C
+patch=1,EE,001A4A20,word,0806928F
+patch=1,EE,001A4A24,word,00000000
+// DEADZONE (same semantics as v17, just relocated)
+patch=1,EE,001A4A28,word,2441FFBF
+patch=1,EE,001A4A2C,word,2C21007F
+patch=1,EE,001A4A30,word,10200002
+patch=1,EE,001A4A34,word,00000000
+patch=1,EE,001A4A38,word,240200C0
+// RET
+patch=1,EE,001A4A3C,word,0806B353
+patch=1,EE,001A4A40,word,A2020057
+
+// ==== Scratch words (seed prev_X / prev_Y to 0x80 stick-center) =========
+patch=1,EE,001A4A48,word,00000080
+patch=1,EE,001A4A4C,word,00000080
+
+// ==== Hook B: matrix-builder prologue (unchanged from v17) ==============
+patch=1,EE,01176AB4,word,08069492
+
+// ==== Trampoline B body at 0x001A5248 (unchanged from v17) ==============
+patch=1,EE,001A5248,word,E7B400B8
+patch=1,EE,001A524C,word,3C080107
+patch=1,EE,001A5250,word,8D01C9FC
+patch=1,EE,001A5254,word,14200006
+patch=1,EE,001A5258,word,00000000
+patch=1,EE,001A525C,word,8D01C880
+patch=1,EE,001A5260,word,10200003
+patch=1,EE,001A5264,word,00000000
+patch=1,EE,001A5268,word,C50DDF0C
+patch=1,EE,001A526C,word,C50CDF00
+patch=1,EE,001A5270,word,0845DAAF
+patch=1,EE,001A5274,word,00000000

@@ -1,0 +1,24 @@
+[*] Polling for 20.0s. Enter aim and flick the stick.
+t=  1.0s  mode=1 aim=0  prev=(X:0x80, Y:0x80)  cur d=(X:  0, Y:  0)  max=(X:  0, Y:  0)
+t=  2.0s  mode=1 aim=0  prev=(X:0x80, Y:0x80)  cur d=(X:  0, Y:  0)  max=(X:  0, Y:  0)
+t=  3.0s  mode=0 aim=1  prev=(X:0x7F, Y:0x40)  cur d=(X:  0, Y:128)  max=(X:  1, Y:128)
+t=  4.1s  mode=0 aim=1  prev=(X:0x7F, Y:0x12)  cur d=(X:  0, Y:128)  max=(X:  1, Y:192)
+t=  5.1s  mode=0 aim=1  prev=(X:0x7F, Y:0x20)  cur d=(X:  0, Y:  0)  max=(X:  1, Y:192)
+t=  6.1s  mode=0 aim=1  prev=(X:0x7F, Y:0x97)  cur d=(X:  0, Y:128)  max=(X:  1, Y:192)
+t=  7.1s  mode=0 aim=1  prev=(X:0x7F, Y:0x20)  cur d=(X:  0, Y:  0)  max=(X:  1, Y:192)
+t=  8.1s  mode=0 aim=1  prev=(X:0x7F, Y:0x20)  cur d=(X:  0, Y:  0)  max=(X:  1, Y:192)
+t=  9.1s  mode=0 aim=1  prev=(X:0x7F, Y:0xA3)  cur d=(X:  0, Y:128)  max=(X:  1, Y:192)
+t= 10.1s  mode=0 aim=1  prev=(X:0x7F, Y:0xE3)  cur d=(X:  0, Y:128)  max=(X:  1, Y:192)
+t= 11.1s  mode=0 aim=1  prev=(X:0x7F, Y:0x23)  cur d=(X:  0, Y:128)  max=(X:  1, Y:192)
+t= 12.2s  mode=0 aim=1  prev=(X:0x7F, Y:0xB3)  cur d=(X:  0, Y:128)  max=(X:  1, Y:192)
+t= 13.2s  mode=0 aim=1  prev=(X:0x7F, Y:0x6F)  cur d=(X:  0, Y:128)  max=(X:  1, Y:192)
+t= 14.2s  mode=0 aim=1  prev=(X:0x7F, Y:0xEF)  cur d=(X:  0, Y:128)  max=(X:  1, Y:192)
+t= 15.2s  mode=0 aim=0  prev=(X:0x7F, Y:0xEF)  cur d=(X:  0, Y:  0)  max=(X:  1, Y:192)
+t= 16.2s  mode=1 aim=0  prev=(X:0x7F, Y:0xEF)  cur d=(X:  0, Y:  0)  max=(X:  1, Y:192)
+t= 17.3s  mode=1 aim=0  prev=(X:0x7F, Y:0xEF)  cur d=(X:  0, Y:  0)  max=(X:  1, Y:192)
+t= 18.3s  mode=1 aim=0  prev=(X:0x7F, Y:0xEF)  cur d=(X:  0, Y:  0)  max=(X:  1, Y:192)
+t= 19.3s  mode=1 aim=0  prev=(X:0x7F, Y:0xEF)  cur d=(X:  0, Y:  0)  max=(X:  1, Y:192)
+
+[=] samples=718  frames_in_aim=463  frames_in_freeroam=253
+[=] Final: max_step_X=1 (0x01)  max_step_Y=192 (0xC0)
+[=] Clamp is NOT engaging (deltas > 0x20).

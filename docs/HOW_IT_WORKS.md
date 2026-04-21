@@ -1,25 +1,29 @@
 # How the SotC Camera-Fix Patch Works
 
-A technical walkthrough of the Shadow of the Colossus (PAL, SCES-53326) camera-input pipeline and how the shipped patch modifies it. The v1 walkthrough (sections 1–10 below) is the foundation — it covers the original autofocus defeat and is still accurate for the pad-read mechanics. Current shipped behavior is v15 + v14, summarized in §0 and cross-referenced to `AIM_PRESERVE_INVESTIGATION.md` for the iteration history.
+A technical walkthrough of the Shadow of the Colossus (PAL, SCES-53326) camera-input pipeline and how the shipped patch modifies it. The v1 walkthrough (sections 1–10 below) is the foundation — it covers the original autofocus defeat and is still accurate for the pad-read mechanics. Current shipped behavior is v17 Trampoline A + v16 Trampoline B ("unified left-stick camera during aim"), summarized in §0 and cross-referenced to `AIM_PRESERVE_INVESTIGATION.md` for the iteration history.
 
 ---
 
 ## 0. What the current patch (`0F0C4A9C_camera_fix.pnach`) actually does
 
-Two hooks with two shared state flags. Per-state behavior matrix:
+Two hooks with three shared state flags and three memory reads (yaw, pitch, mode). Per-state behavior matrix:
 
 | State | mode flag `0x0106C9FC` | aim flag `0x0106B484` | cinematic flag `0x0106C880` | Hook A (pad-read) | Hook B (aim matrix) |
 |---|---|---|---|---|---|
 | Free-roam | 1 | 0 | 1 | deadzone substitute (autofocus defeat) | skipped |
-| Swim | 0 | 0 | 1 | deadzone substitute | applied |
+| Swim | 0 | 0 | 1 | deadzone substitute | applied (yaw + pitch) |
 | On colossus | 0 | 0 | 1 | deadzone substitute | applied |
 | Climbing | 0 | **2** | 1 | deadzone substitute | applied |
-| Bow aim | 0 | **1** | 1 | left-X → right-X scratch remap | applied |
+| Bow aim | 0 | **1** | 1 | left-X → right-X scratch remap | applied (yaw + pitch) |
 | Cinematic | 0 | 0 | **0** | deadzone substitute | **skipped (v14)** |
 
-**Hook A (Trampoline A at `0x001A4984`, 20 instructions)** — redirects the pad-byte decode. The remap path fires **only** when the aim flag equals exactly `1`. Every other value (0, 2, anything else) falls through to the deadzone substitute, so autofocus is defeated consistently across free-roam, swim, on-colossus, climbing, and any future non-aim state we haven't sampled.
+**Hook A (Trampoline A at `0x001A4984`, 21 instructions)** — redirects the pad-byte decode. The remap path fires **only** when the aim flag equals exactly `1`. In aim both axes of the left stick get remapped into the right-stick scratch slots (`s0+0x56` gets left-X, `s0+0x57` gets left-Y via a RET-delay-slot trick). Every non-aim state falls through to the deadzone substitute, so autofocus is defeated consistently across free-roam, swim, on-colossus, climbing, and any future non-aim state we haven't sampled.
 
-**Hook B (Trampoline B at `0x001A5248`, 11 instructions)** — overrides the aim-direction matrix yaw with the live camera-yaw register so the reticle tracks the camera view (FPS-style centered aim). The override is suppressed in free-roam (no aim camera to track) and also suppressed during cinematics (the cinematic flag gate added in v14), so scripted cutscene cameras aren't hijacked.
+**Hook B (Trampoline B at `0x001A5248`, 12 instructions)** — overrides **both** aim-direction matrix inputs with live camera state: `$f12` from the camera yaw register (`0x0106DF00`) and `$f13` from the camera pitch register (`0x0106DF0C`). So the reticle tracks the camera view in both axes (FPS-style centered aim + pitch inheritance on entry). The override is suppressed in free-roam (no aim camera to track) and suppressed during cinematics (v14 cinematic-bail gate).
+
+**End-to-end during aim**: left-stick X/Y → Trampoline A remap → scratch slots `s0+0x56` / `s0+0x57` → game's free-roam pad-decode → camera yaw/pitch registers `0x0106DF00` / `0x0106DF0C` → Hook B override of `$f12`/`$f13` → aim matrix builder → reticle tracks camera. The right stick is effectively unused in aim (its scratch slots are overwritten by the left-stick remap).
+
+**Known caveat (v17)**: occasional camera "teleport" visible during aim, specifically on **direction reversal** (e.g. pushing the stick from full right to full left). Three rounds of investigation spanning seven distinct fix attempts (v18/v19 smoothing `$f12`/`$f13`, v20 smoothing direction buffer, v21 clamping at the atan2 writer, v22 forcing a reference vector to break feedback, v23 MIPS counter-based override toggle, plus Python hammer and Python toggle approaches) all either did nothing, broke aim orientation, froze the game, or produced a camera-vs-aim fight. We've now positively identified the jump location (`0x0106E7C0` rendered forward, driven from `0x0106C230` direction buffer via VU0 transform at `0x0125A5C8`), disassembled the matrix builder at `0x01176AA0`, and confirmed a feedback loop where the direction buffer is read as input AND written as output each frame. See `AIM_PRESERVE_INVESTIGATION.md` "Third session" for the full diagnostic trail. The proper fix requires PCSX2's debugger to single-step into `0x001B47F0` / `0x001B3F08` and identify an upstream "target" aim-direction writer that we haven't yet mapped. Mild enough that v17 is the shipped default; the v16 "split-stick" archive `patch/0F0C4A9C_camera_fix_v16_right_stick.pnach` is kept as a fallback for anyone who finds the flicker intolerable.
 
 **Flag semantics** (stable-state diffed via `tools/find_stable_flags.py` + `tools/diff_aim_vs_all.py` / `diff_cinematic.py`):
 
@@ -27,7 +31,19 @@ Two hooks with two shared state flags. Per-state behavior matrix:
 - `0x0106B484` — bow-aim indicator. `1` in bow-aim only; `0` in free-roam/swim/on-colossus; `2` while climbing. Gate uses strict `== 1`.
 - `0x0106C880` — gameplay indicator. `1` during gameplay (all states we've sampled), `0` during cinematic cutscenes.
 
-See `AIM_PRESERVE_INVESTIGATION.md` for how these flags were discovered, the iteration history (v1 → v15), and the failure modes that drove each refinement. The original v1 walkthrough below remains accurate for the pad-read mechanics and the MIPS trampoline technique.
+**Register reads** (all offsets from the `0x01070000` base loaded by the trampolines' `lui t0, 0x0107`):
+
+- `0x0106DF00` — camera yaw (radians). Driven by right-stick-X native pad-decode, also by left-X via Trampoline A remap during aim.
+- `0x0106DF0C` — camera pitch (radians, range ≈ ±1.22 / ±70°). Driven by right-stick-Y native pad-decode.
+
+See `AIM_PRESERVE_INVESTIGATION.md` for how these flags/registers were discovered, the iteration history (v1 → v16), and the failure modes that drove each refinement. The original v1 walkthrough below remains accurate for the pad-read mechanics and the MIPS trampoline technique.
+
+### Available variants
+
+Two mutually exclusive pnach variants ship in `patch/`:
+
+- **`0F0C4A9C_camera_fix.pnach`** — main v17, **left-stick aim** (unified yaw + pitch on left stick, right stick unused in aim). The one described by the matrix above.
+- **`0F0C4A9C_camera_fix_v17_right_aim.pnach`** — v17-RS, **right-stick aim** (traditional camera/aim input on right stick, left stick inert in aim). Trampoline A shrinks to 7 words (no left-X/Y remap); Hook B unchanged. All other features (autofocus defeat, swim fix, climbing fix, on-colossus fix, cinematic bail, pitch inheritance) are identical. Pick this one if you prefer right-stick aim, or if the direction-reversal flicker in the left-stick variant bothers you — the reversal flicker likely originates from Trampoline A's remap interacting with the matrix builder's feedback loop and is at least reduced in v17-RS. **Only keep one of the two pnach files in PCSX2's cheats folder at a time** (they conflict at Trampoline A's address range).
 
 ---
 

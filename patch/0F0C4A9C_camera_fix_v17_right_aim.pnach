@@ -1,0 +1,90 @@
+gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
+comment=Camera fixes (RIGHT-STICK AIM variant): autofocus disable + FPS-centered aim driven by right stick
+//
+// What this pnach does (v17-RS — right-stick aim variant)
+// =======================================================
+// Alternative to the main camera-fix pnach for players who prefer to aim
+// with the right stick. All other features identical.
+//
+// Two coordinated hooks:
+//   1. Hook A (pad-read) at 0x001ACD44 -> Trampoline A at 0x001A4984.
+//      Just does the autofocus-defeat deadzone substitute for every
+//      state (free-roam, swim, aim, on-colossus, climbing, cinematics).
+//      No left-stick remap — aim is driven entirely via the right stick
+//      through the native camera pad-decode path.
+//
+//   2. Hook B (aim matrix builder) at 0x01176AB4 -> Trampoline B at
+//      0x001A5248. Unchanged from the main v17 pnach: overrides
+//      $f12/$f13 with the camera yaw/pitch registers (0x0106DF00 /
+//      0x0106DF0C). Camera is driven by right stick -> $f12/$f13
+//      inherit that -> aim reticle tracks camera. Cinematic bail via
+//      0x0106C880.
+//
+// End-to-end during aim:
+//   right-stick X/Y -> pad-decode -> s0+0x56/0x57 (untouched by us)
+//                   -> camera pad-decode -> 0x0106DF00 / 0x0106DF0C
+//                   -> Hook B loads into $f12 / $f13 -> aim matrix
+//   left-stick      -> runs through native aim pipeline but its output
+//                      gets overridden by Hook B. Effectively inert.
+//
+// To use:
+//   - Keep only ONE of these pnach files in PCSX2's cheats folder at a time:
+//       0F0C4A9C_camera_fix.pnach            (main, left-stick aim)
+//       0F0C4A9C_camera_fix_v17_right_aim.pnach  (this file, right-stick aim)
+//   - Having both active simultaneously will cause conflicts at the
+//     Trampoline A address range.
+//
+// Trampoline A at 0x001A4984 (7 instructions)
+// -------------------------------------------
+//   addiu at, v0, -0x41            ; at = byte - 0x41
+//   sltiu at, at, 0x7F             ; in [0x41, 0xBF] deadzone?
+//   beq   at, zero, +2             ; outside -> RET (no substitute)
+//   nop
+//   addiu v0, zero, 0xC0           ; substitute 0xC0 (autofocus defeat)
+//   j     0x001ACD4C               ; RET
+//   sb    v0, 0x57(s0)             ; [delay slot]
+//
+// Trampoline B at 0x001A5248 (12 instructions, same as v17 main)
+// --------------------------------------------------------------
+//   swc1  $f20, 0xb8($sp)          ; restore clobbered
+//   lui   t0, 0x0107
+//   lw    at, -0x3604(t0)          ; mode flag
+//   bne   at, zero, +6             ; free-roam -> skip override
+//   nop
+//   lw    at, -0x3780(t0)          ; cinematic flag
+//   beq   at, zero, +3             ; cinematic -> skip override
+//   nop
+//   lwc1  $f13, -0x20F4(t0)        ; camera pitch -> $f13
+//   lwc1  $f12, -0x2100(t0)        ; camera yaw   -> $f12
+//   j     0x01176ABC               ; RET
+//   nop
+
+// ==== Hook A: pad-read ==================================================
+patch=1,EE,0001ACD44,word,08069261
+patch=1,EE,0001ACD48,word,92420107
+
+// ==== Trampoline A body at 0x001A4984 ===================================
+patch=1,EE,001A4984,word,2441FFBF
+patch=1,EE,001A4988,word,2C21007F
+patch=1,EE,001A498C,word,10200002
+patch=1,EE,001A4990,word,00000000
+patch=1,EE,001A4994,word,240200C0
+patch=1,EE,001A4998,word,0806B353
+patch=1,EE,001A499C,word,A2020057
+
+// ==== Hook B: matrix-builder prologue (aim-center) ======================
+patch=1,EE,01176AB4,word,08069492
+
+// ==== Trampoline B body at 0x001A5248 ===================================
+patch=1,EE,001A5248,word,E7B400B8
+patch=1,EE,001A524C,word,3C080107
+patch=1,EE,001A5250,word,8D01C9FC
+patch=1,EE,001A5254,word,14200006
+patch=1,EE,001A5258,word,00000000
+patch=1,EE,001A525C,word,8D01C880
+patch=1,EE,001A5260,word,10200003
+patch=1,EE,001A5264,word,00000000
+patch=1,EE,001A5268,word,C50DDF0C
+patch=1,EE,001A526C,word,C50CDF00
+patch=1,EE,001A5270,word,0845DAAF
+patch=1,EE,001A5274,word,00000000
