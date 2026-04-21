@@ -1,21 +1,21 @@
 # How the SotC Camera-Fix Patch Works
 
-A technical walkthrough of the Shadow of the Colossus (PAL, SCES-53326) camera-input pipeline and how the shipped patch modifies it. The v1 walkthrough (sections 1–10 below) is the foundation — it covers the original autofocus defeat and is still accurate for the pad-read mechanics. Current shipped behavior is v17 Trampoline A + v16 Trampoline B ("unified left-stick camera during aim"), summarized in §0 and cross-referenced to `AIM_PRESERVE_INVESTIGATION.md` for the iteration history.
+A technical walkthrough of the Shadow of the Colossus (PAL, SCES-53326) camera-input pipeline and how the shipped patch modifies it. The v1 walkthrough (sections 1–10 below) is the foundation — it covers the original autofocus defeat and is still accurate for the pad-read mechanics. Current shipped behavior is v17 Trampoline A + v16 Trampoline B ("unified left-stick camera during aim"), summarized in §0.
 
 ---
 
-## 0. What the current patch (`0F0C4A9C_camera_fix.pnach`) actually does
+## 0. What the current patch (`0F0C4A9C_camera_fix_v17_left_aim.pnach`) actually does
 
 Two hooks with three shared state flags and three memory reads (yaw, pitch, mode). Per-state behavior matrix:
 
-| State | mode flag `0x0106C9FC` | aim flag `0x0106B484` | cinematic flag `0x0106C880` | Hook A (pad-read) | Hook B (aim matrix) |
-|---|---|---|---|---|---|
-| Free-roam | 1 | 0 | 1 | deadzone substitute (autofocus defeat) | skipped |
-| Swim | 0 | 0 | 1 | deadzone substitute | applied (yaw + pitch) |
-| On colossus | 0 | 0 | 1 | deadzone substitute | applied |
-| Climbing | 0 | **2** | 1 | deadzone substitute | applied |
-| Bow aim | 0 | **1** | 1 | left-X → right-X scratch remap | applied (yaw + pitch) |
-| Cinematic | 0 | 0 | **0** | deadzone substitute | **skipped (v14)** |
+| State       | mode flag `0x0106C9FC` | aim flag `0x0106B484` | cinematic flag `0x0106C880` | Hook A (pad-read)                      | Hook B (aim matrix)   |
+| ----------- | ---------------------- | --------------------- | --------------------------- | -------------------------------------- | --------------------- |
+| Free-roam   | 1                      | 0                     | 1                           | deadzone substitute (autofocus defeat) | skipped               |
+| Swim        | 0                      | 0                     | 1                           | deadzone substitute                    | applied (yaw + pitch) |
+| On colossus | 0                      | 0                     | 1                           | deadzone substitute                    | applied               |
+| Climbing    | 0                      | **2**                 | 1                           | deadzone substitute                    | applied               |
+| Bow aim     | 0                      | **1**                 | 1                           | left-X → right-X scratch remap         | applied (yaw + pitch) |
+| Cinematic   | 0                      | 0                     | **0**                       | deadzone substitute                    | **skipped (v14)**     |
 
 **Hook A (Trampoline A at `0x001A4984`, 21 instructions)** — redirects the pad-byte decode. The remap path fires **only** when the aim flag equals exactly `1`. In aim both axes of the left stick get remapped into the right-stick scratch slots (`s0+0x56` gets left-X, `s0+0x57` gets left-Y via a RET-delay-slot trick). Every non-aim state falls through to the deadzone substitute, so autofocus is defeated consistently across free-roam, swim, on-colossus, climbing, and any future non-aim state we haven't sampled.
 
@@ -23,7 +23,7 @@ Two hooks with three shared state flags and three memory reads (yaw, pitch, mode
 
 **End-to-end during aim**: left-stick X/Y → Trampoline A remap → scratch slots `s0+0x56` / `s0+0x57` → game's free-roam pad-decode → camera yaw/pitch registers `0x0106DF00` / `0x0106DF0C` → Hook B override of `$f12`/`$f13` → aim matrix builder → reticle tracks camera. The right stick is effectively unused in aim (its scratch slots are overwritten by the left-stick remap).
 
-**Known caveat (v17)**: occasional camera "teleport" visible during aim, specifically on **direction reversal** (e.g. pushing the stick from full right to full left). Three rounds of investigation spanning seven distinct fix attempts (v18/v19 smoothing `$f12`/`$f13`, v20 smoothing direction buffer, v21 clamping at the atan2 writer, v22 forcing a reference vector to break feedback, v23 MIPS counter-based override toggle, plus Python hammer and Python toggle approaches) all either did nothing, broke aim orientation, froze the game, or produced a camera-vs-aim fight. We've now positively identified the jump location (`0x0106E7C0` rendered forward, driven from `0x0106C230` direction buffer via VU0 transform at `0x0125A5C8`), disassembled the matrix builder at `0x01176AA0`, and confirmed a feedback loop where the direction buffer is read as input AND written as output each frame. See `AIM_PRESERVE_INVESTIGATION.md` "Third session" for the full diagnostic trail. The proper fix requires PCSX2's debugger to single-step into `0x001B47F0` / `0x001B3F08` and identify an upstream "target" aim-direction writer that we haven't yet mapped. Mild enough that v17 is the shipped default; the v16 "split-stick" archive `patch/0F0C4A9C_camera_fix_v16_right_stick.pnach` is kept as a fallback for anyone who finds the flicker intolerable.
+**Known caveat (v17)**: occasional camera "teleport" visible during aim, specifically on **direction reversal** (e.g. pushing the stick from full right to full left). Three rounds of investigation spanning seven distinct fix attempts (v18/v19 smoothing `$f12`/`$f13`, v20 smoothing direction buffer, v21 clamping at the atan2 writer, v22 forcing a reference vector to break feedback, v23 MIPS counter-based override toggle, plus Python hammer and Python toggle approaches) all either did nothing, broke aim orientation, froze the game, or produced a camera-vs-aim fight. We've now positively identified the jump location (`0x0106E7C0` rendered forward, driven from `0x0106C230` direction buffer via VU0 transform at `0x0125A5C8`), disassembled the matrix builder at `0x01176AA0`, and confirmed a feedback loop where the direction buffer is read as input AND written as output each frame. The proper fix requires PCSX2's debugger to single-step into `0x001B47F0` / `0x001B3F08` and identify an upstream "target" aim-direction writer that we haven't yet mapped. Mild enough that v17 left-stick is the shipped default; the right-stick variant `patch/0F0C4A9C_camera_fix_v17_right_aim.pnach` is available as an alternative for anyone who finds the flicker intolerable (the flicker is likely reduced or gone there since Trampoline A has no left-stick remap interacting with the matrix-builder feedback loop).
 
 **Flag semantics** (stable-state diffed via `tools/find_stable_flags.py` + `tools/diff_aim_vs_all.py` / `diff_cinematic.py`):
 
@@ -36,14 +36,15 @@ Two hooks with three shared state flags and three memory reads (yaw, pitch, mode
 - `0x0106DF00` — camera yaw (radians). Driven by right-stick-X native pad-decode, also by left-X via Trampoline A remap during aim.
 - `0x0106DF0C` — camera pitch (radians, range ≈ ±1.22 / ±70°). Driven by right-stick-Y native pad-decode.
 
-See `AIM_PRESERVE_INVESTIGATION.md` for how these flags/registers were discovered, the iteration history (v1 → v16), and the failure modes that drove each refinement. The original v1 walkthrough below remains accurate for the pad-read mechanics and the MIPS trampoline technique.
+The original v1 walkthrough below (sections 1–10) remains accurate for the pad-read mechanics and the MIPS trampoline technique. The v17 additions (aim flag gate at `0x0106B484`, cinematic flag at `0x0106C880`, camera-pitch register `0x0106DF0C`, two-axis left-stick remap in Trampoline A, aim-matrix `$f12`/`$f13` override in Trampoline B) follow the same hook-and-trampoline pattern.
 
 ### Available variants
 
-Two mutually exclusive pnach variants ship in `patch/`:
+Three pnach files ship in `patch/`. They all share the same CRC so **only one of the full-featured variants should be active in PCSX2's cheats folder at a time** — they conflict at Trampoline A / Hook B address ranges:
 
-- **`0F0C4A9C_camera_fix.pnach`** — main v17, **left-stick aim** (unified yaw + pitch on left stick, right stick unused in aim). The one described by the matrix above.
-- **`0F0C4A9C_camera_fix_v17_right_aim.pnach`** — v17-RS, **right-stick aim** (traditional camera/aim input on right stick, left stick inert in aim). Trampoline A shrinks to 7 words (no left-X/Y remap); Hook B unchanged. All other features (autofocus defeat, swim fix, climbing fix, on-colossus fix, cinematic bail, pitch inheritance) are identical. Pick this one if you prefer right-stick aim, or if the direction-reversal flicker in the left-stick variant bothers you — the reversal flicker likely originates from Trampoline A's remap interacting with the matrix builder's feedback loop and is at least reduced in v17-RS. **Only keep one of the two pnach files in PCSX2's cheats folder at a time** (they conflict at Trampoline A's address range).
+- **`0F0C4A9C_camera_fix_v17_left_aim.pnach`** — main v17, **left-stick aim** (unified yaw + pitch on left stick, right stick unused in aim). The configuration the matrix above describes.
+- **`0F0C4A9C_camera_fix_v17_right_aim.pnach`** — v17-RS, **right-stick aim** (traditional camera/aim input on right stick, left stick inert in aim). Trampoline A shrinks from 21 to 7 words (no left-X/Y remap); Hook B unchanged. All other features (autofocus defeat, swim fix, climbing fix, on-colossus fix, cinematic bail, pitch inheritance) are identical. Pick this one if you prefer right-stick aim, or if the direction-reversal flicker in the left-stick variant bothers you — the reversal flicker likely originates from Trampoline A's remap interacting with the matrix builder's feedback loop and is reduced or gone in v17-RS.
+- **`0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach`** — the original v1, **autofocus-only**. Just disables the free-roam right-stick auto-recenter (13 patches at `0x001A4984`); aim cameras, swim, climbing all behave vanilla. Useful if you only want the original autofocus-defeat feature without any of the FPS-aim changes.
 
 ---
 
@@ -67,6 +68,7 @@ Two mutually exclusive pnach variants ship in `patch/`:
 Shadow of the Colossus has an **auto-focus** (sometimes called "auto-center") feature on its camera: whenever the player releases the right analog stick in free-roam, the camera automatically pitches back toward a neutral horizontal view. This is intended as a convenience but many players find it disorienting — the camera moves without their input, often fighting against what they want to see.
 
 **Goal:** disable this auto-centering while keeping:
+
 - Manual right-stick pitch control (up/down)
 - Right-stick yaw control (left/right)
 - Camera behavior in special modes (bow aim, sword-to-colossus guide, climbing, cutscenes)
@@ -139,12 +141,12 @@ In human terms: the function reads four consecutive bytes from the pad buffer (p
 
 **Pad-byte layout (per-frame pad state):**
 
-| Pad offset | Meaning |
-|---|---|
-| +0x106 | (stick X — not our target) |
-| +0x107 | **right-stick Y** (this is what we hook) |
-| +0x108 | (stick X again or other axis — context-dependent) |
-| +0x109 | additional pad byte |
+| Pad offset | Meaning                                           |
+| ---------- | ------------------------------------------------- |
+| +0x106     | (stick X — not our target)                        |
+| +0x107     | **right-stick Y** (this is what we hook)          |
+| +0x108     | (stick X again or other axis — context-dependent) |
+| +0x109     | additional pad byte                               |
 
 **Byte values (confirmed experimentally):**
 
@@ -194,6 +196,7 @@ At a high level, the patch intercepts the pad-read at `0x001ACD44` and condition
 3. **If in free-roam mode, and the real byte is outside `[0x41, 0xBF]`** (the player is actually holding the stick to pitch the camera): pass through unchanged. Manual pitch control works normally.
 
 The result is a camera that:
+
 - Stays still when the player releases the stick (auto-focus defeated)
 - Responds normally when the player pitches or yaws
 - Behaves correctly in special camera modes
@@ -228,7 +231,7 @@ Two instructions at the hook site:
 0x001ACD48  lbu v0, 0x107(s2)    ; encoded 0x92420107
 ```
 
-The MIPS `j` instruction has a **delay slot** — the instruction at PC+4 executes *before* the jump transfers control. We exploit this by putting the original `lbu v0, 0x107(s2)` in the delay slot: the real pad byte gets loaded into `$v0` at the same moment we jump to the trampoline.
+The MIPS `j` instruction has a **delay slot** — the instruction at PC+4 executes _before_ the jump transfers control. We exploit this by putting the original `lbu v0, 0x107(s2)` in the delay slot: the real pad byte gets loaded into `$v0` at the same moment we jump to the trampoline.
 
 So when the trampoline begins executing, `$v0` already holds the real pad byte, and the trampoline can check it and modify it.
 
@@ -254,7 +257,7 @@ So when the trampoline begins executing, `$v0` already holds the real pad byte, 
    - `lui at, 0x0107` + `lw at, -0x3604(at)` loads `mem[0x0106C9FC]` into `$at`
    - `beq at, zero, +6` branches to `0x001A49A8` (the `j` return)
    - Delay slot `nop` runs
-   - `j 0x001ACD4C` jumps back to the instruction *after* the original `sb v0, 0x57(s0)`
+   - `j 0x001ACD4C` jumps back to the instruction _after_ the original `sb v0, 0x57(s0)`
    - `sb v0, 0x57(s0)` (the `j`'s delay slot) stores the **real, unmodified** `$v0`
    - Result: real pad byte is stored, no substitution happens
 
@@ -299,11 +302,11 @@ Without a mode check, the trampoline substitutes `0xC0` whenever the pad byte is
 
 ### Finding the flag
 
-The aim-mode state has to be represented *somewhere* in EE memory. The search approach:
+The aim-mode state has to be represented _somewhere_ in EE memory. The search approach:
 
 1. Take **20 memory snapshots over 2 seconds** in free-roam idle. Keep only addresses whose value stayed constant across all 20 samples (this filters out per-frame toggles and counters).
 2. Do the same in bow-aim state.
-3. Compare the two "stable maps." Addresses that are stable in both states but have *different* values are candidate mode flags.
+3. Compare the two "stable maps." Addresses that are stable in both states but have _different_ values are candidate mode flags.
 
 Result: **646 candidate addresses**, many of them clean 0↔1 integer flags in the `0x0106A000..0x0106E000` region (the camera config / input state area).
 
@@ -335,17 +338,18 @@ The offset `-0x3604` is the difference from `0x01070000` to our flag address, si
 
 Binary-searched experimentally by live-patching `addiu v0, zero, IMM` for various IMM values and observing camera behavior:
 
-| IMM | Auto-focus on release | Upward drift |
-|---|---|---|
-| 0x7F | **fires** (seen as neutral) | none |
-| 0x90 | fires | none |
-| 0xB0 | fires | none |
-| **0xC0** | **suppressed** | **none** |
-| 0xE0 | suppressed | none |
-| 0xF0 | suppressed | constant up |
-| 0xFF | suppressed | constant up, fast |
+| IMM      | Auto-focus on release       | Upward drift      |
+| -------- | --------------------------- | ----------------- |
+| 0x7F     | **fires** (seen as neutral) | none              |
+| 0x90     | fires                       | none              |
+| 0xB0     | fires                       | none              |
+| **0xC0** | **suppressed**              | **none**          |
+| 0xE0     | suppressed                  | none              |
+| 0xF0     | suppressed                  | constant up       |
+| 0xFF     | suppressed                  | constant up, fast |
 
 `0xC0` is the **minimum value** that:
+
 - Registers as "non-neutral" to the auto-focus trigger (so on release, the game doesn't snap)
 - Stays below the pitch-input scaling curve's take-effect threshold (so no drift)
 
@@ -360,6 +364,7 @@ The check `addiu at, v0, -0x41; sltiu at, at, 0x7F` computes "is `v0` in the hal
 ### The trampoline location `0x001A4984`
 
 Chosen from `find_free_space.py`'s output. Criteria:
+
 - Large enough run of zeros (≥ 11 words): `0x001A4984` has 39 zero-words. ✓
 - Small enough to clearly be inter-function alignment padding, not an actively-used BSS region (which might get re-zeroed by the game during scene transitions).
 - Close to the hook site (for human readability; MIPS `j` reaches anywhere in the 256 MB segment, so distance doesn't matter for correctness).
@@ -367,6 +372,7 @@ Chosen from `find_free_space.py`'s output. Criteria:
 ### The mode flag `0x0106C9FC`
 
 Chosen from the stable-diff candidates because:
+
 - Clean `0 ↔ 1` integer flag (easy to test with `beq zero`)
 - Stable over seconds of sampling within a state
 - Different value between free-roam and aim
@@ -402,7 +408,7 @@ The most plausible explanation: the lerp computation happens entirely in VU0 mac
 
 ### Auto-focus uses a fat deadzone
 
-The `[0x41, 0xBF]` range (radius 63) is surprisingly wide — that's about 50% of the stick's travel on each side of center. Most sticks have a hardware deadzone of a few units; this is clearly a *gameplay* deadzone, deliberately wide so that partial stick movements aren't interpreted as "deliberate pitch hold." The trade-off is that auto-focus fires very eagerly: even a slight stick nudge won't disarm it.
+The `[0x41, 0xBF]` range (radius 63) is surprisingly wide — that's about 50% of the stick's travel on each side of center. Most sticks have a hardware deadzone of a few units; this is clearly a _gameplay_ deadzone, deliberately wide so that partial stick movements aren't interpreted as "deliberate pitch hold." The trade-off is that auto-focus fires very eagerly: even a slight stick nudge won't disarm it.
 
 ### Pitch input has a separate, smaller threshold
 
@@ -441,6 +447,7 @@ The overall technique — hook the pad-read, trampoline with deadzone substitute
 The patch is 13 single-word writes. Nine of them define a small conditional-substitute routine in unused memory; two redirect the camera's pad-byte read to that routine; the remaining two are the trampoline's branch-offset `nop`s.
 
 It works because:
+
 - SotC's auto-focus trigger is a "neutral deadzone" check on the raw pad byte
 - There's a window of values that are "non-neutral for trigger purposes" but "below the pitch-input threshold"
 - Substituting the pad byte into that window on release (and only on release) disarms auto-focus without producing drift

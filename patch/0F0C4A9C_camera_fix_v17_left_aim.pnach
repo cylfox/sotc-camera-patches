@@ -1,8 +1,11 @@
 gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
-comment=Camera fixes: free-roam autofocus disable + FPS-style centered aim + remap gated to aim-only
+comment=v17 LEFT-STICK AIM: autofocus disable + FPS-centered aim (unified yaw+pitch on left stick) + swim/climbing/on-colossus fixes + cinematic bail
 //
-// What this pnach does (v16 — right-stick-only camera during aim)
-// ================================================================
+// Author:       cylfox (https://github.com/cylfox)
+// Last updated: 2026-04-21
+//
+// What this pnach does (v17 — unified left-stick camera during aim)
+// =================================================================
 // Two coordinated hooks:
 //   1. Hook A (pad-read) at 0x001ACD44 -> Trampoline A at 0x001A4984.
 //      Behavior branches on two flags:
@@ -25,11 +28,16 @@ comment=Camera fixes: free-roam autofocus disable + FPS-style centered aim + rem
 //        any other non-aim state where the mode flag is 0.
 //
 //      Aim (mode flag = 0, AIM flag = 1):
-//        Left-stick-X pad byte is copied into the right-stick-X scratch
-//        slot (s0+0x56). Downstream the camera-yaw register 0x0106DF00
-//        is driven by the left stick. Combined with Hook B, the aim
-//        reticle stays centered while left-stick drives both camera
-//        yaw and aim pitch.
+//        BOTH left-stick axes are remapped into the right-stick scratch
+//        slots that feed the free-roam camera pad-decode:
+//          s0+0x56 <- left-X byte   (drives camera yaw 0x0106DF00)
+//          s0+0x57 <- left-Y byte   (drives camera pitch 0x0106DF0C)
+//        Combined with Hook B's $f12 + $f13 overrides, the aim reticle
+//        stays centered and left-stick drives both aim yaw and aim
+//        pitch. Right-stick is unused during aim. Known minor caveat:
+//        occasional flicker while aiming, likely a timing race between
+//        our scratch writes and a later re-read by the pad-decode or
+//        aim pipeline — mild, not yet debugged.
 //
 //   2. Hook B (aim matrix builder) at 0x01176AB4 -> Trampoline B at
 //      0x001A5248. When mode flag = 0 AND cinematic flag
@@ -44,14 +52,13 @@ comment=Camera fixes: free-roam autofocus disable + FPS-style centered aim + rem
 //      the override is skipped so scripted cutscene cameras aren't
 //      hijacked.
 //
-//      TRADE-OFF: overriding $f13 also kills the native left-Y aim
-//      pitch path — the matrix builder receives camera pitch no
-//      matter what the aim-pitch chain computed. So during aim,
-//      PITCH must be driven by the RIGHT stick (which pans the camera
-//      natively). Left-stick-Y no longer moves the reticle up/down.
-//      Yaw still works via the existing left-X remap in Trampoline A.
-//      See the "left-stick camera support" TODO in the docs for a
-//      plan to unify pitch input too.
+//      Overriding $f13 kills the native left-Y aim-pitch path, so
+//      pitch input has to reach the aim matrix via the camera-pitch
+//      register. Trampoline A's v17 remap delivers exactly that by
+//      writing the left-Y pad byte into s0+0x57 (the camera pad-decode
+//      reads it into 0x0106DF0C), so the left stick unifies yaw+pitch
+//      again during aim, with both axes inherited from the camera on
+//      entry.
 //
 // CAVEAT: the AIM flag at 0x0106B484 takes at least three observed
 // values — 0 (free-roam/swim/on-top-of-colossus), 1 (bow-aim), 2
@@ -64,8 +71,8 @@ comment=Camera fixes: free-roam autofocus disable + FPS-style centered aim + rem
 // tools/diff_aim_vs_all.py to find a flag whose aim-only value
 // remains distinct across that new state too.
 //
-// Trampoline A at 0x001A4984 (20 instructions; v15 strict aim == 1 check)
-// -----------------------------------------------------------------------
+// Trampoline A at 0x001A4984 (21 instructions; v17 adds left-Y remap)
+// -------------------------------------------------------------------
 //   lui   at, 0x0107
 //   lw    at, -0x3604(at)         ; mode flag 0x0106C9FC
 //   bne   at, zero, DEADZONE      ; free-roam -> deadzone check
@@ -77,7 +84,8 @@ comment=Camera fixes: free-roam autofocus disable + FPS-style centered aim + rem
 //   nop
 //   lbu   t0, 0x108(s2)           ; aim path: left-X byte
 //   sb    t0, 0x56(s0)            ; aim path: overwrite right-X scratch
-//   j     RET
+//   lbu   v0, 0x109(s2)           ; [v17] aim: v0 = left-Y byte
+//   j     RET                     ; delay-slot store writes v0 to 0x57
 //   nop
 // DEADZONE:
 //   addiu at, v0, -0x41
@@ -87,7 +95,7 @@ comment=Camera fixes: free-roam autofocus disable + FPS-style centered aim + rem
 //   addiu v0, zero, 0xC0          ; substitute
 // RET:
 //   j     0x001ACD4C
-//   sb    v0, 0x57(s0)            ; [jump delay slot]
+//   sb    v0, 0x57(s0)            ; [jump delay slot; stores left-Y in aim path]
 //
 // Trampoline B at 0x001A5248 (12 instructions; v16 added pitch override)
 // ----------------------------------------------------------------------
@@ -111,24 +119,25 @@ patch=1,EE,0001ACD48,word,92420107
 // ==== Trampoline A body at 0x001A4984 ===================================
 patch=1,EE,001A4984,word,3C010107
 patch=1,EE,001A4988,word,8C21C9FC
-patch=1,EE,001A498C,word,1420000A
+patch=1,EE,001A498C,word,1420000B
 patch=1,EE,001A4990,word,00000000
 patch=1,EE,001A4994,word,3C010107
 patch=1,EE,001A4998,word,8C21B484
 patch=1,EE,001A499C,word,2421FFFF
-patch=1,EE,001A49A0,word,14200005
+patch=1,EE,001A49A0,word,14200006
 patch=1,EE,001A49A4,word,00000000
 patch=1,EE,001A49A8,word,92480108
 patch=1,EE,001A49AC,word,A2080056
-patch=1,EE,001A49B0,word,08069273
-patch=1,EE,001A49B4,word,00000000
-patch=1,EE,001A49B8,word,2441FFBF
-patch=1,EE,001A49BC,word,2C21007F
-patch=1,EE,001A49C0,word,10200002
-patch=1,EE,001A49C4,word,00000000
-patch=1,EE,001A49C8,word,240200C0
-patch=1,EE,001A49CC,word,0806B353
-patch=1,EE,001A49D0,word,A2020057
+patch=1,EE,001A49B0,word,92420109
+patch=1,EE,001A49B4,word,08069274
+patch=1,EE,001A49B8,word,00000000
+patch=1,EE,001A49BC,word,2441FFBF
+patch=1,EE,001A49C0,word,2C21007F
+patch=1,EE,001A49C4,word,10200002
+patch=1,EE,001A49C8,word,00000000
+patch=1,EE,001A49CC,word,240200C0
+patch=1,EE,001A49D0,word,0806B353
+patch=1,EE,001A49D4,word,A2020057
 
 // ==== Hook B: matrix-builder prologue (aim-center) ======================
 patch=1,EE,01176AB4,word,08069492

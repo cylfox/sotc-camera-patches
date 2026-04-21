@@ -1,5 +1,8 @@
 gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
-comment=Camera fixes (RIGHT-STICK AIM variant): autofocus disable + FPS-centered aim driven by right stick
+comment=v17 RIGHT-STICK AIM: autofocus disable + FPS-centered aim (yaw+pitch on right stick, left stick inert in aim) + swim/climbing/on-colossus fixes + cinematic bail
+//
+// Author:       cylfox (https://github.com/cylfox)
+// Last updated: 2026-04-21
 //
 // What this pnach does (v17-RS — right-stick aim variant)
 // =======================================================
