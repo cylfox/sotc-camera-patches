@@ -1,0 +1,15 @@
+gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
+comment=BISECT test4 - Tramp B body only (12 words, no hook)
+
+patch=1,EE,001A5248,word,E7B400B8
+patch=1,EE,001A524C,word,3C080107
+patch=1,EE,001A5250,word,8D01C9FC
+patch=1,EE,001A5254,word,14200006
+patch=1,EE,001A5258,word,00000000
+patch=1,EE,001A525C,word,8D01C880
+patch=1,EE,001A5260,word,10200003
+patch=1,EE,001A5264,word,00000000
+patch=1,EE,001A5268,word,C50DDF0C
+patch=1,EE,001A526C,word,C50CDF00
+patch=1,EE,001A5270,word,0845DAAF
+patch=1,EE,001A5274,word,00000000

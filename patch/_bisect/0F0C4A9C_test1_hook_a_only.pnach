@@ -1,0 +1,5 @@
+gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
+comment=BISECT test1 - Hook A only (2 words at 0x001ACD44/8)
+
+patch=1,EE,0001ACD44,word,08069261
+patch=1,EE,0001ACD48,word,92420107

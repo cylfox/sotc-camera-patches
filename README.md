@@ -42,15 +42,17 @@ Three pnach files ship in `patch/`. **Only one should be active in PCSX2's cheat
 
 | File                                                      | Pick it if you want                                                                                                                                                      |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `0F0C4A9C_camera_fix_v17_left_aim.pnach`                  | **Left-stick aim** (default). Unified yaw+pitch on the left stick during bow-aim. Reticle stays centered.                                                                |
-| `0F0C4A9C_camera_fix_v17_right_aim.pnach`                 | **Right-stick aim**. Traditional camera/aim input on the right stick; left stick inert in aim.                                                                           |
+| `0F0C4A9C_camera_fix_v18_left_aim.pnach`                  | **Left-stick aim** (default). Unified yaw+pitch on the left stick during bow-aim. Reticle stays centered.                                                                |
+| `0F0C4A9C_camera_fix_v18_right_aim.pnach`                 | **Right-stick aim**. Traditional camera/aim input on the right stick; left stick inert in aim.                                                                           |
 | `0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach` | **Minimal / original**. Just disables the free-roam auto-focus. No swim fix, no FPS-aim, no other changes. Use if you only want total control over the free roam camera. |
 
-All three include the free-roam autofocus defeat. The v17 variants additionally include the swim / climbing / on-colossus fixes and the FPS-centered aim.
+All three include the free-roam autofocus defeat. The v18 variants additionally include the swim / climbing / on-colossus fixes and the FPS-centered aim.
 
-### Behavior summary (v17 variants)
+> **v18 vs v17.** v17 worked when applied after boot but hung PCSX2 if cheats were enabled before launch. Bisection showed that the memory region v17 used for Trampoline B (`0x001A5248..0x001A5274`) is not inert padding during early boot — the PS2 kernel / ELF loader uses that region for transient boot data, and per-vsync pnach writes there corrupted it. v18 relocates Trampoline B into the larger, proven-safe `0x001A4984` padding region (right after Trampoline A). Functionally identical to v17; now safe to enable from a fresh PCSX2 launch. The old v17 pnaches are preserved under `patch/v17/` for reference.
 
-| State                          | Vanilla                                                   | Patch (v17)                                                                                |
+### Behavior summary (v18 variants)
+
+| State                          | Vanilla                                                   | Patch (v18)                                                                                |
 | ------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | Free-roam, release stick       | Camera snaps back to horizontal                           | **Camera holds position**                                                                  |
 | Free-roam, manual yaw/pitch    | Works                                                     | Works                                                                                      |
@@ -58,34 +60,36 @@ All three include the free-roam autofocus defeat. The v17 variants additionally 
 | On top of a colossus           | Left stick affects camera weirdly                         | **Right stick → camera, left stick inert**                                                 |
 | Climbing a colossus            | Left stick affects camera weirdly                         | **Right stick → camera**                                                                   |
 | Bow aim (entry)                | Camera snaps to align with Wander, Y resets to horizontal | **Camera direction is preserved; aim inherits yaw AND pitch from the camera on entry**     |
-| Bow aim (sustained, v17-left)  | Left stick aims, camera follows                           | **Left stick drives both yaw and pitch of aim; reticle stays centered**                    |
-| Bow aim (sustained, v17-right) | Left stick aims, camera follows                           | **Right stick drives both yaw and pitch of aim; reticle stays centered, left stick inert** |
+| Bow aim (sustained, v18-left)  | Left stick aims, camera follows                           | **Left stick drives both yaw and pitch of aim; reticle stays centered**                    |
+| Bow aim (sustained, v18-right) | Left stick aims, camera follows                           | **Right stick drives both yaw and pitch of aim; reticle stays centered, left stick inert** |
 | Cinematics                     | Work                                                      | Work — scripted cutscene cameras are not hijacked                                          |
-
-### Known caveat (v17)
-
-Both v17 variants have an occasional camera "teleport/flicker" visible during aim on **direction reversal** (e.g., snapping the stick from full right to full left). It's a one-frame step of ~1.5° rotation, documented in detail in `docs/HOW_IT_WORKS.md`. It's less pronounced in the right-stick variant (or that's my perception).
-
-If it bothers you fall back to `0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach` (no FPS-aim features, vanilla aim).
-
-I've also noticed when you first apply the patch, then start the game, the game looks stuck. A temporal fix is to start the game and once booted apply the patch.
 
 ---
 
-## Controller setup (recommended for the `v17_right_aim` variant)
+## Controller setup (recommended for the `v18_right_aim` variant)
 
-If you're using **`0F0C4A9C_camera_fix_v17_right_aim.pnach`** on a modern controller where the right stick is your main camera input and the triggers are your main "press-and-hold" inputs, the vanilla SotC button layout doesn't map cleanly to muscle memory from other games. A small PCSX2 controller remap makes the patch much more ergonomic:
+If you're using **`0F0C4A9C_camera_fix_v18_right_aim.pnach`** on a modern controller where the right stick is your main camera input and the triggers are your main "press-and-hold" inputs, the vanilla SotC button layout doesn't map cleanly to muscle memory from other games. A small PCSX2 controller remap makes the patch much more ergonomic:
 
 - Map physical **L2 trigger → virtual Square** (action / draw bow / grab / pick up / release)
 - Map physical **R2 trigger → virtual Cross** (jump / grip boost)
 
 Do this in **PCSX2: Settings → Controllers → your pad → Bindings**. You don't need to remove the original Square/Cross face-button bindings; you can add L2/R2 as _additional_ inputs for the same virtual buttons.
 
-### Important side-effect: L2's "reset camera behind Wander" is broken
+---
 
-In vanilla SotC, holding **L2 re-centers the camera behind Wander**. **This patch disables that behavior** — holding L2 does nothing for the camera. (Our `v1_disable_freeroam_autofocus` variant and both v17 variants all interfere with the reset-camera-behind-Wander logic as a side-effect of the autofocus-defeat mechanism.)
+## Known issues
 
-If you rely on L2's camera reset in vanilla, it won't work with this patch active. The recommended L2-as-Square remap above effectively repurposes L2 so you aren't missing the functionality — L2 becomes a useful "press to interact/draw bow" instead of a no-op.
+### Aim direction-reversal flicker (v18 variants)
+
+Both v18 variants have an occasional camera "teleport/flicker" visible during aim on **direction reversal** (e.g., snapping the stick from full right to full left). It's a one-frame step of ~1.5° rotation, documented in detail in `docs/HOW_IT_WORKS.md`. It's less pronounced in the right-stick variant (or that's my perception).
+
+If it bothers you fall back to `0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach` (no FPS-aim features, vanilla aim).
+
+### L2's "reset camera behind Wander" is broken (all variants)
+
+In vanilla SotC, holding **L2 re-centers the camera behind Wander**. **This patch disables that behavior** — holding L2 does nothing for the camera. The `v1_disable_freeroam_autofocus` variant and both v18 variants all interfere with the reset-camera-behind-Wander logic as a side-effect of the autofocus-defeat mechanism.
+
+If you rely on L2's camera reset in vanilla, it won't work with this patch active. The recommended **L2-as-Square remap** (see Controller setup above) effectively repurposes L2 so you aren't missing the functionality — L2 becomes a useful "press to interact/draw bow" instead of a no-op.
 
 ---
 
@@ -93,14 +97,17 @@ If you rely on L2's camera reset in vanilla, it won't work with this patch activ
 
 ```
 .
-├── patch/                    ← shippable pnaches (pick ONE)
-│   ├── 0F0C4A9C_camera_fix_v17_left_aim.pnach    (default: left-stick aim)
-│   ├── 0F0C4A9C_camera_fix_v17_right_aim.pnach   (alternative: right-stick aim)
-│   └── 0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach (minimal: v1 autofocus only)
+├── patch/
+│   ├── 0F0C4A9C_camera_fix_v18_left_aim.pnach     ← default: left-stick aim (boot-safe)
+│   ├── 0F0C4A9C_camera_fix_v18_right_aim.pnach    ← alternative: right-stick aim (boot-safe)
+│   ├── 0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach  ← minimal autofocus-only
+│   ├── v17/                  ← archived v17 variants (pre-boot-safe layout)
+│   └── _bisect/              ← the four minimal test pnaches used to find the v18 fix
 ├── docs/
 │   └── HOW_IT_WORKS.md       ← technical walkthrough (read this for the full story)
 ├── tools/                    ← Python scripts for PINE-based live patching & discovery
 │   ├── pine_client.py         — PINE IPC client (TCP 127.0.0.1:28011)
+│   ├── boot_trace.py          — timing trace: log memory changes during boot
 │   ├── apply_combined_v17.py  — live-apply v17 Trampoline A (left-stick aim)
 │   ├── apply_combined_v17_rs.py — live-apply v17 Trampoline A (right-stick aim)
 │   ├── apply_aim_center_v16.py  — live-apply v17 Trampoline B (aim matrix override)
@@ -145,7 +152,9 @@ Two coordinated hooks, both in inter-function zero padding:
 
 1. **Hook A** at `0x001ACD44` (camera pad-read) → Trampoline A at `0x001A4984`. Depending on the state flags at `0x0106C9FC` (mode) and `0x0106B484` (bow-aim), either substitutes a `0xC0` byte into the right-stick-Y scratch slot (defeats free-roam autofocus) or remaps left-stick bytes into the right-stick scratch slots (so the left stick drives the camera via the native camera pad-decode).
 
-2. **Hook B** at `0x01176AB4` (aim matrix builder prologue) → Trampoline B at `0x001A5248`. When `0x0106C9FC = 0` (non-free-roam) and `0x0106C880 ≠ 0` (not in a cinematic), overrides the aim-direction matrix inputs `$f12` (yaw) and `$f13` (pitch) with the live camera registers `0x0106DF00` / `0x0106DF0C`. Result: the aim direction tracks the camera view, reticle stays centered.
+2. **Hook B** at `0x01176AB4` (aim matrix builder prologue) → Trampoline B at `0x001A49A0` for right-aim / `0x001A49D8` for left-aim (both inside the same `0x001A4984` padding region as Trampoline A). When `0x0106C9FC = 0` (non-free-roam) and `0x0106C880 ≠ 0` (not in a cinematic), overrides the aim-direction matrix inputs `$f12` (yaw) and `$f13` (pitch) with the live camera registers `0x0106DF00` / `0x0106DF0C`. Result: the aim direction tracks the camera view, reticle stays centered.
+
+> Prior versions (v17) used `0x001A5248` for Trampoline B. That region was later shown, by bisection, to be used by the PS2 kernel / game ELF loader for transient data during early boot — writing to it from `patch=1` directives caused a boot hang. v18 relocates Trampoline B into the same large padding region as Trampoline A, which is provably safe across the entire boot sequence.
 
 See `docs/HOW_IT_WORKS.md` for the full technical walkthrough — the camera-input pipeline, the MIPS assembly, how the state flags were discovered, and the design rationale.
 
@@ -170,7 +179,7 @@ The `tools/` scripts are mostly build-agnostic — only the addresses in the app
 
 Reverse-engineered by **[cylfox](https://github.com/cylfox)** in 2026-04 via PCSX2's built-in debugger and PINE IPC.
 
-Last updated: 2026-04-21.
+Last updated: 2026-04-23 (v18: boot-safe Trampoline B relocation).
 
 ---
 

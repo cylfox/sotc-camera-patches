@@ -29,3 +29,6 @@ desktop.ini
 # Temporary capture outputs if you re-run scenario_run at the repo root.
 # (archive/scenarios/ IS versioned — those captures document the discovery.)
 /scenarios/
+
+# v18 boot-trace captures (ephemeral diagnostic outputs)
+archive/boot_traces/

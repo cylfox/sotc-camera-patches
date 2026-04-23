@@ -1,0 +1,44 @@
+gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
+comment=BISECT test5 - FULL v17 right-aim with Tramp B relocated to safe padding
+
+// Bisection showed 0x001A5248 is used by the game during boot.
+// Move Tramp B into the confirmed-safe 0x001A4984 padding region,
+// right after Tramp A ends at 0x001A499C.
+//
+// Layout:
+//   0x001A4984..0x001A499C   Tramp A (7 words, unchanged)
+//   0x001A49A0..0x001A49CC   Tramp B (12 words, MOVED from 0x001A5248)
+//
+// Hook B's jump target changes: 0x08069492 -> 0x08069268 (j 0x001A49A0).
+// Tramp B's internal code is unchanged (its return j 0x01176ABC is absolute).
+
+// ==== Hook A: pad-read ==================================================
+patch=1,EE,0001ACD44,word,08069261
+patch=1,EE,0001ACD48,word,92420107
+
+// ==== Trampoline A body at 0x001A4984 (v17 right-aim, 7 words) ==========
+patch=1,EE,001A4984,word,2441FFBF
+patch=1,EE,001A4988,word,2C21007F
+patch=1,EE,001A498C,word,10200002
+patch=1,EE,001A4990,word,00000000
+patch=1,EE,001A4994,word,240200C0
+patch=1,EE,001A4998,word,0806B353
+patch=1,EE,001A499C,word,A2020057
+
+// ==== Hook B: matrix-builder prologue (aim-center) ======================
+// NEW TARGET: j 0x001A49A0  (was j 0x001A5248)
+patch=1,EE,01176AB4,word,08069268
+
+// ==== Trampoline B body at 0x001A49A0 (MOVED, 12 words) =================
+patch=1,EE,001A49A0,word,E7B400B8
+patch=1,EE,001A49A4,word,3C080107
+patch=1,EE,001A49A8,word,8D01C9FC
+patch=1,EE,001A49AC,word,14200006
+patch=1,EE,001A49B0,word,00000000
+patch=1,EE,001A49B4,word,8D01C880
+patch=1,EE,001A49B8,word,10200003
+patch=1,EE,001A49BC,word,00000000
+patch=1,EE,001A49C0,word,C50DDF0C
+patch=1,EE,001A49C4,word,C50CDF00
+patch=1,EE,001A49C8,word,0845DAAF
+patch=1,EE,001A49CC,word,00000000
