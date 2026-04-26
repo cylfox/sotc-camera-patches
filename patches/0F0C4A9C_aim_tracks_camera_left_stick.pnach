@@ -2,6 +2,7 @@ gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
 comment=LEFT-STICK AIM: autofocus disable + FPS-centered aim (unified yaw+pitch on left stick) + swim/climbing/on-colossus fixes + cinematic bail.
 //
 // Author:       cylfox (https://github.com/cylfox)
+// Version:      v18
 // Last updated: 2026-04-23
 //
 // What this pnach does — unified left-stick camera during aim

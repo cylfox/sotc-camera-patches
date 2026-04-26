@@ -25,7 +25,7 @@ Implemented as two MIPS trampolines injected into inter-function alignment paddi
 
 ### PCSX2 (desktop, v1.7+)
 
-1. Pick **only one** pnach file from `patch/` (see the variants below) and copy it into PCSX2's `PCSX2\patches` folder.
+1. Pick the pnach files you want from `patches/` (see the variants below) and copy them into PCSX2's `PCSX2\patches` folder. The two `aim_tracks_camera_*_stick` bundles are mutually exclusive; the independent components can be combined freely.
 2. Start the game. The patch applies automatically per-frame via `patch=1` directives, so it's resilient to any game-side memory reinitialization. You can click on `Tools` → `Reload Cheats/Patches` to reload it if needed.
 
 To disable it remove the pnach file from `PCSX2\patches` folder, or uncheck "Enable Cheats".
@@ -43,53 +43,56 @@ NetherSX2 is based on a pre-2023 PCSX2 fork which may require the classic exact-
 
 ## Pick your variant
 
-Three camera-fix pnach files and two optional independent pnach files (velocity-cap, no-letterbox) ship in `patch/`. **Only one camera-fix variant should be active at a time** — they share address ranges and will conflict if layered. The optional pnaches are **independent** and can be enabled alongside any camera-fix variant.
+Five pnach files ship in `patches/` — two **aim-tracking variants** (full bundles, pick at most one) and three **independent components** you can mix freely.
 
-### Camera-fix (pick ONE)
+### Aim-tracking variants (pick at most ONE — full bundles)
 
-| File                                                      | Pick it if you want                                                                                                                                                      |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `0F0C4A9C_camera_fix_v18_left_aim.pnach`                  | **Left-stick aim** (default). Unified yaw+pitch on the left stick during bow-aim. Reticle stays centered.                                                                |
-| `0F0C4A9C_camera_fix_v18_right_aim.pnach`                 | **Right-stick aim**. Traditional camera/aim input on the right stick; left stick inert in aim.                                                                           |
-| `0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach` | **Minimal / original**. Just disables the free-roam auto-focus. No swim fix, no FPS-aim, no other changes. Use if you only want total control over the free roam camera. |
+These bundle every camera fix into a single pnach: free-roam autofocus defeat, swim / climbing / on-colossus state fixes, FPS-centered aim with pitch inheritance, and cinematic bail-out. Pick the one that matches the stick you want driving the aim.
 
-All three include the free-roam autofocus defeat. The v18 variants additionally include the swim / climbing / on-colossus fixes and the FPS-centered aim.
+| File                                                | Pick it if you want                                                                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0F0C4A9C_aim_tracks_camera_left_stick.pnach`       | **Left-stick aim** (default). Unified yaw+pitch on the left stick during bow-aim. Reticle stays centered.                                    |
+| `0F0C4A9C_aim_tracks_camera_right_stick.pnach`      | **Right-stick aim**. Traditional camera/aim input on the right stick; left stick inert in aim.                                               |
 
-### Velocity cap (optional, combine with any camera-fix)
+The two aim-tracking variants share address ranges — only one at a time. They also include the autofocus-defeat fix internally, so do **not** also load `disable_freeroam_autofocus.pnach` alongside (Hook A's address range would conflict).
 
-| File                                    | Pick it if you want                                                                                                                                                                                                                                                                                                                            |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0F0C4A9C_camera_velocity_cap_v1.pnach` | **Lower max camera speed + less acceleration feel.** Clamps the game's angular-velocity accumulators to ±2.0 rad/s instead of the vanilla ±5.236. Reduces the "camera builds up speed the longer you push" sensation and the compound-speed-up on repeated presses. Safe to enable alongside any camera-fix variant — addresses don't overlap. |
+### Independent components (mix freely)
+
+Each component is a single-feature patch that touches its own non-overlapping address range. Combine any subset. The autofocus-defeat one is the same fix that's already inside the aim-tracking bundles — load it on its own only if you don't want the FPS-aim feature.
+
+| File                                              | What it does                                                                                                                              |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `0F0C4A9C_disable_freeroam_autofocus.pnach`       | **Disables free-roam camera auto-focus** (the "pitch re-center on release" behavior). Manual pitch/yaw still work. Aim cameras untouched. Skip this if you're loading an `aim_tracks_camera_*_stick` bundle. |
+| `0F0C4A9C_camera_velocity_cap.pnach`              | **Lower max camera speed + less acceleration feel.** Clamps the game's angular-velocity accumulators to ±2.0 rad/s instead of the vanilla ±5.236. Reduces the "camera builds up speed the longer you push" sensation. |
+| `0F0C4A9C_disable_cinematic_letterbox.pnach`      | **Disables the cinematic black bars** at the top/bottom of the screen during cutscenes. Useful in 16:9 where PCSX2 already crops vertically; the bars compound that crop and make the cutscene feel over-zoomed. |
+
+### Velocity cap details
 
 > **Set in-game camera sensitivity to its highest setting** when using the velocity cap. The cap clamps the *maximum* angular velocity; at lower in-game sensitivities the game's stick-to-velocity scale never reaches that ceiling, so the cap has no effect (and behavior across sensitivities feels inconsistent). Highest sensitivity gives the cap something to clamp against on every push, which is when it does what it's supposed to.
 
-### No letterbox (optional, combine with any camera-fix)
-
-| File                              | Pick it if you want                                                                                                                                                                                                                                                                                                            |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `0F0C4A9C_no_letterbox.pnach`     | **Disable the cinematic black bars** at the top and bottom of the screen during cutscenes. Useful in 16:9 where PCSX2 already crops vertically; the bars compound that crop and make the cutscene feel over-zoomed. Holding the bar-visibility flag at `0.0` per frame keeps cutscene playback otherwise intact (camera, audio, scripted action all proceed normally). Safe to enable alongside any camera-fix variant. |
+### Letterbox-disable details
 
 > **Side-effect note:** removing the bars does not widen the cutscene camera FOV — the framing is still 4:3-source. You'll see the parts of the scene the bars were hiding (e.g., character heads/feet near frame edges), which is generally fine but can occasionally reveal geometry the cutscene was framing out.
 
-### Behavior summary (camera fix variants)
+### Behavior summary (aim-tracking variants)
 
-| State                          | Vanilla                                                   | Patch (v18)                                                                                |
-| ------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Free-roam, release stick       | Camera snaps back to horizontal                           | **Camera holds position**                                                                  |
-| Free-roam, manual yaw/pitch    | Works                                                     | Works                                                                                      |
-| Swim                           | Left stick drives both PJ and camera (noisy)              | **Right stick → camera, left stick → PJ only**; autofocus disabled                         |
-| On top of a colossus           | Left stick affects camera weirdly                         | **Right stick → camera, left stick inert**                                                 |
-| Climbing a colossus            | Left stick affects camera weirdly                         | **Right stick → camera**                                                                   |
-| Bow aim (entry)                | Camera snaps to align with Wander, Y resets to horizontal | **Camera direction is preserved; aim inherits yaw AND pitch from the camera on entry**     |
-| Bow aim (sustained, v18-left)  | Left stick aims, camera follows                           | **Left stick drives both yaw and pitch of aim; reticle stays centered**                    |
-| Bow aim (sustained, v18-right) | Left stick aims, camera follows                           | **Right stick drives both yaw and pitch of aim; reticle stays centered, left stick inert** |
-| Cinematics                     | Work                                                      | Work — scripted cutscene cameras are not hijacked                                          |
+| State                                  | Vanilla                                                   | Patch (aim-tracking variants)                                                              |
+| -------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Free-roam, release stick               | Camera snaps back to horizontal                           | **Camera holds position**                                                                  |
+| Free-roam, manual yaw/pitch            | Works                                                     | Works                                                                                      |
+| Swim                                   | Left stick drives both PJ and camera (noisy)              | **Right stick → camera, left stick → PJ only**; autofocus disabled                         |
+| On top of a colossus                   | Left stick affects camera weirdly                         | **Right stick → camera, left stick inert**                                                 |
+| Climbing a colossus                    | Left stick affects camera weirdly                         | **Right stick → camera**                                                                   |
+| Bow aim (entry)                        | Camera snaps to align with Wander, Y resets to horizontal | **Camera direction is preserved; aim inherits yaw AND pitch from the camera on entry**     |
+| Bow aim (sustained, left-stick variant)  | Left stick aims, camera follows                           | **Left stick drives both yaw and pitch of aim; reticle stays centered**                    |
+| Bow aim (sustained, right-stick variant) | Left stick aims, camera follows                           | **Right stick drives both yaw and pitch of aim; reticle stays centered, left stick inert** |
+| Cinematics                             | Work                                                      | Work — scripted cutscene cameras are not hijacked                                          |
 
 ### Behavior summary (velocity cap)
 
 SotC accumulates angular velocity over time while the right stick is held — the camera gets faster the longer you push, and repeated presses in the same direction compound because decay between presses doesn't fully complete. The velocity-cap patch clamps the game's two velocity accumulators to a lower max without changing the game's ramp or decay rates.
 
-| Axis  | Vanilla max speed               | Capped (v1)                  | Effect                                                                                                         |
+| Axis  | Vanilla max speed               | Capped                       | Effect                                                                                                         |
 | ----- | ------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Yaw   | 5.236 rad/s (5π/3 ≈ **300°/s**) | 2.000 rad/s (**≈ 115°/s**)   | Camera stops "building up" past a comfortable max. Repeat-press compounding is capped at the same 2.0 ceiling. |
 | Pitch | 1.396 rad/s (≈ **80°/s**)       | Unchanged (cap is above max) | No visible change.                                                                                             |
@@ -106,9 +109,9 @@ The cinematic system stores a "bars visible" float at `0x01477504`: `1.0` while 
 
 ---
 
-## Controller setup (recommended for the `v18_right_aim` variant)
+## Controller setup (recommended for the `aim_tracks_camera_right_stick` variant)
 
-If you're using **`0F0C4A9C_camera_fix_v18_right_aim.pnach`** on a modern controller where the right stick is your main camera input and the triggers are your main "press-and-hold" inputs, the vanilla SotC button layout doesn't map cleanly to muscle memory from other games. A small PCSX2 controller remap makes the patch much more ergonomic:
+If you're using **`0F0C4A9C_aim_tracks_camera_right_stick.pnach`** on a modern controller where the right stick is your main camera input and the triggers are your main "press-and-hold" inputs, the vanilla SotC button layout doesn't map cleanly to muscle memory from other games. A small PCSX2 controller remap makes the patch much more ergonomic:
 
 - Map physical **L2 trigger → virtual Square** (action / draw bow / grab / pick up / release)
 - Map physical **R2 trigger → virtual Cross** (jump / grip boost)
@@ -119,15 +122,15 @@ Do this in **PCSX2: Settings → Controllers → your pad → Bindings**. You do
 
 ## Known issues
 
-### Aim direction-reversal flicker (v18 variants)
+### Aim direction-reversal flicker (aim-tracking variants)
 
-Both v18 variants have an occasional camera "teleport/flicker" visible during aim on **direction reversal** (e.g., snapping the stick from full right to full left). It's a one-frame step of ~1.5° rotation, documented in detail in `docs/HOW_IT_WORKS_CAMERA_FIX.md`. It's less pronounced in the right-stick variant (or that's my perception).
+Both aim-tracking variants have an occasional camera "teleport/flicker" visible during aim on **direction reversal** (e.g., snapping the stick from full right to full left). It's a one-frame step of ~1.5° rotation, documented in detail in `docs/HOW_IT_WORKS_CAMERA_FIX.md`. It's less pronounced in the right-stick variant (or that's my perception).
 
-If it bothers you fall back to `0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach` (no FPS-aim features, vanilla aim) or use the **velocity cap patch**.
+If it bothers you fall back to `0F0C4A9C_disable_freeroam_autofocus.pnach` (no FPS-aim features, vanilla aim) or use the **velocity cap patch**.
 
 ### L2's "reset camera behind Wander" is broken (all variants)
 
-In vanilla SotC, holding **L2 re-centers the camera behind Wander**. **This patch disables that behavior** — holding L2 does nothing for the camera. The `v1_disable_freeroam_autofocus` variant and both v18 variants all interfere with the reset-camera-behind-Wander logic as a side-effect of the autofocus-defeat mechanism.
+In vanilla SotC, holding **L2 re-centers the camera behind Wander**. **This patch disables that behavior** — holding L2 does nothing for the camera. Both `disable_freeroam_autofocus.pnach` and the two aim-tracking variants interfere with the reset-camera-behind-Wander logic as a side-effect of the autofocus-defeat mechanism.
 
 If you rely on L2's camera reset in vanilla, it won't work with this patch active. The recommended **L2-as-Square remap** (see Controller setup above) effectively repurposes L2 so you aren't missing the functionality — L2 becomes a useful "press to interact/draw bow" instead of a no-op.
 
@@ -137,15 +140,15 @@ If you rely on L2's camera reset in vanilla, it won't work with this patch activ
 
 ```
 .
-├── patch/
-│   ├── 0F0C4A9C_camera_fix_v18_left_aim.pnach     ← default: left-stick aim
-│   ├── 0F0C4A9C_camera_fix_v18_right_aim.pnach    ← alternative: right-stick aim
-│   ├── 0F0C4A9C_camera_fix_v1_disable_freeroam_autofocus.pnach  ← minimal autofocus-only
-│   ├── 0F0C4A9C_camera_velocity_cap_v1.pnach      ← optional: caps camera yaw+pitch angular velocity at 2.0 rad/s
-│   └── 0F0C4A9C_no_letterbox.pnach                ← optional: disables cinematic letterbox bars
+├── patches/
+│   ├── 0F0C4A9C_aim_tracks_camera_left_stick.pnach    ← bundle: left-stick aim
+│   ├── 0F0C4A9C_aim_tracks_camera_right_stick.pnach   ← bundle: right-stick aim
+│   ├── 0F0C4A9C_disable_freeroam_autofocus.pnach      ← component: free-roam autofocus disable
+│   ├── 0F0C4A9C_camera_velocity_cap.pnach             ← component: caps camera yaw+pitch angular velocity at 2.0 rad/s
+│   └── 0F0C4A9C_disable_cinematic_letterbox.pnach     ← component: disables cinematic letterbox bars
 ├── docs/
-│   ├── HOW_IT_WORKS_CAMERA_FIX.md    ← camera-fix v18 walkthrough (autofocus + FPS-aim mechanics)
-│   └── HOW_IT_WORKS_VELOCITY_CAP.md  ← velocity-cap pnach walkthrough (independent from v18)
+│   ├── HOW_IT_WORKS_CAMERA_FIX.md    ← aim-tracking walkthrough (autofocus + FPS-aim mechanics)
+│   └── HOW_IT_WORKS_VELOCITY_CAP.md  ← velocity-cap pnach walkthrough (independent component)
 ├── tools/                    ← Python scripts for PINE-based live patching & discovery
 │   ├── pine_client.py         — PINE IPC client (TCP 127.0.0.1:28011)
 │   ├── boot_trace.py          — timing trace: log memory changes during boot
@@ -194,11 +197,11 @@ Two coordinated hooks, both in inter-function zero padding:
 
 1. **Hook A** at `0x001ACD44` (camera pad-read) → Trampoline A at `0x001A4984`. Depending on the state flags at `0x0106C9FC` (mode) and `0x0106B484` (bow-aim), either substitutes a `0xC0` byte into the right-stick-Y scratch slot (defeats free-roam autofocus) or remaps left-stick bytes into the right-stick scratch slots (so the left stick drives the camera via the native camera pad-decode).
 
-2. **Hook B** at `0x01176AB4` (aim matrix builder prologue) → Trampoline B at `0x001A49A0` for right-aim / `0x001A49D8` for left-aim (both inside the same `0x001A4984` padding region as Trampoline A). When `0x0106C9FC = 0` (non-free-roam) and `0x0106C880 ≠ 0` (not in a cinematic), overrides the aim-direction matrix inputs `$f12` (yaw) and `$f13` (pitch) with the live camera registers `0x0106DF00` / `0x0106DF0C`. Result: the aim direction tracks the camera view, reticle stays centered.
+2. **Hook B** at `0x01176AB4` (aim matrix builder prologue) → Trampoline B at `0x001A49A0` for right-stick / `0x001A49D8` for left-stick (both inside the same `0x001A4984` padding region as Trampoline A). When `0x0106C9FC = 0` (non-free-roam) and `0x0106C880 ≠ 0` (not in a cinematic), overrides the aim-direction matrix inputs `$f12` (yaw) and `$f13` (pitch) with the live camera registers `0x0106DF00` / `0x0106DF0C`. Result: the aim direction tracks the camera view, reticle stays centered.
 
 See `docs/HOW_IT_WORKS_CAMERA_FIX.md` for the full technical walkthrough — the camera-input pipeline, the MIPS assembly, how the state flags were discovered, and the design rationale.
 
-> **Velocity-cap pnach** is documented in its own walkthrough — it's a different patch into a different part of the game (the camera velocity-update function), with no overlap with v18's hook sites or trampoline region. See **[`docs/HOW_IT_WORKS_VELOCITY_CAP.md`](docs/HOW_IT_WORKS_VELOCITY_CAP.md)**.
+> **Velocity-cap pnach** is documented in its own walkthrough — it's a different patch into a different part of the game (the camera velocity-update function), with no overlap with the aim-tracking variants' hook sites or trampoline region. See **[`docs/HOW_IT_WORKS_VELOCITY_CAP.md`](docs/HOW_IT_WORKS_VELOCITY_CAP.md)**.
 
 ---
 
@@ -227,6 +230,6 @@ Last updated: 2026-04-26.
 
 ## License
 
-The patches themselves (files under `patch/`) are byte-level writes with no original game code — coordinates into binary memory. Share freely.
+The patches themselves (files under `patches/`) are byte-level writes with no original game code — coordinates into binary memory. Share freely.
 
 The tools and documentation in this repository: MIT — use, modify, port, fork as you like.

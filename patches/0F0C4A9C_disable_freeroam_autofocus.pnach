@@ -2,6 +2,7 @@ gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
 comment=v1 Disable free-roam camera pitch auto-focus; preserve manual pitch/yaw + vanilla bow/sword aim cameras
 //
 // Author:       cylfox (https://github.com/cylfox)
+// Version:      v1
 // Last updated: 2026-04-21
 //
 // How it works

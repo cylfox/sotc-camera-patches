@@ -1,6 +1,10 @@
 gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
 comment=Disable cinematic letterbox bars (16:9-friendly; reveals area cropped by bars)
 //
+// Author:       cylfox (https://github.com/cylfox)
+// Version:      v1
+// Last updated: 2026-04-26
+//
 // The bars are gated by a float at 0x01477504:
 //   0.0 = bars hidden (gameplay state)
 //   1.0 = bars visible (cinematic state, set when the cutscene fade-in completes)

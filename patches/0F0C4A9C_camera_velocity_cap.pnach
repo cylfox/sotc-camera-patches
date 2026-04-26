@@ -2,6 +2,7 @@ gametitle=Shadow of the Colossus (PAL, SCES-53326) [CRC 0F0C4A9C]
 comment=camera-velocity cap v1: clamps yaw and pitch angular-velocity accumulators to +/-2.0 rad/s. Independent from camera_fix v18; can be loaded alongside.
 //
 // Author:       cylfox (https://github.com/cylfox)
+// Version:      v1
 // Last updated: 2026-04-23
 //
 // What this pnach does

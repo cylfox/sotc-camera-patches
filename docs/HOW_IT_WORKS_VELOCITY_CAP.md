@@ -1,8 +1,8 @@
 # Camera velocity-cap pnach — how it works
 
-Applies to: `patch/0F0C4A9C_camera_velocity_cap_v1.pnach`
+Applies to: `patches/0F0C4A9C_camera_velocity_cap.pnach`
 
-This pnach is **independent from the camera-fix v18 family**. It can be enabled alone, or alongside any camera-fix variant. No address overlap. No shared state.
+This pnach is **independent from the aim-tracking variants**. It can be enabled alone, or alongside any other camera-fix component or aim-tracking bundle. No address overlap. No shared state.
 
 ---
 
@@ -165,12 +165,12 @@ If you want finer control over these behaviors — growth dampening, aggressive 
 
 ---
 
-## Why the addresses don't conflict with camera-fix v18
+## Why the addresses don't conflict with the aim-tracking variants
 
 | Pnach                            | Hook sites                        | Trampoline body                     |
 | -------------------------------- | --------------------------------- | ----------------------------------- |
-| `camera_fix_v18_*`               | `0x001ACD44`, `0x01176AB4`        | `0x001A4984..0x001A4A04`            |
-| `camera_velocity_cap_v1`         | `0x01359008`                      | `0x0012EFCC..0x0012F028`            |
+| `aim_tracks_camera_*_stick`      | `0x001ACD44`, `0x01176AB4`        | `0x001A4984..0x001A4A04`            |
+| `camera_velocity_cap`            | `0x01359008`                      | `0x0012EFCC..0x0012F028`            |
 
 Completely disjoint. PCSX2 loads both pnach files if both are in the patches folder, and their per-vsync writes don't race each other.
 
