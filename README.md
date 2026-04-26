@@ -1,4 +1,4 @@
-# SotC Camera Fixes
+# SotC Camera Patches
 
 > **This is my love letter to TeamICO and this amazing game ❤️**
 
