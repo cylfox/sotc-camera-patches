@@ -3,12 +3,12 @@
 > [!IMPORTANT]
 > **This is my love letter to TeamICO and this amazing game ❤️**
 
-A PCSX2 pnach patches for **Shadow of the Colossus (PAL, SCES-53326, CRC `0F0C4A9C`)** that fixes several camera behaviors:
+Pnach patches for PS2's **Shadow of the Colossus (PAL, SCES-53326, CRC `0F0C4A9C`)** that fixes several camera behaviors:
 
 - Disable camera **auto-focus** ("pitch re-center on release") in free-roam
 - Aim reticle follows the camera view like a **FPS-style centered aim**
 - **Velocity cap** clamps angular camera velocity at a lower max for a less "build-up" feel
-- Disable black bars during cutscenes (helpful in 16:9 where the bars compound the 4:3-source vertical crop)
+- Disable **black bars** during cutscenes (helpful in 16:9 where the bars compound the 4:3-source vertical crop)
 
 > [!NOTE]
 > **Tested configuration:** PAL SCES-53326 using **NTSC mode (60 Hz)** selected from the game's selector and **Spanish** as the in-game language. CRC `0F0C4A9C` is the same disc regardless of boot options, so the byte-level patches should apply to any PAL copy
